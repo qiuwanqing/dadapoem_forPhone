@@ -2831,7 +2831,7 @@ blurBtn.addEventListener("click", () => {
     let stream = null;
     let facingMode = "environment";
 
-    let captureMode = "mp";
+    let captureMode = "none";
     let pointerDown = false;
     let startPt = null;
     let roi = null;
@@ -4073,6 +4073,7 @@ async function initModel(){
       btnModeGrid?.classList.toggle("active", m==="grid");
       btnModeMagnet?.classList.toggle("active", m==="magnet");
 
+      if (m === "none") return;
       if (m === "mp") showHint("MP: tap object to segment", 900);
       if (m === "rect") showHint("RECT: hold and drag to draw box, release to capture", 900);
       if (m === "draw") showHint("DRAW: hold and draw path, release to capture", 900);
@@ -5183,7 +5184,7 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
       stageTap.y = e.clientY;
       stageTap.id = e.pointerId;
 
-      if (captureMode !== "mp"){
+      if (captureMode === "rect" || captureMode === "draw" || captureMode === "grid"){
         e.preventDefault();
         pointerDown = true;
 
@@ -5246,16 +5247,17 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
     }, { passive:false });
 
     stage.addEventListener("pointerup", async (e)=>{
-      // ✅ MP：pointerup 做 tap 判定 -> 触发分割
-      if (captureMode === "mp"){
+      // ✅ MP/none：pointerup 做 tap 判定；none 只保留双击 Capture Tour，不触发分割
+      if (captureMode === "mp" || captureMode === "none"){
         if (stageTap.down && e.pointerId === stageTap.id){
           const dx = e.clientX - stageTap.x;
           const dy = e.clientY - stageTap.y;
           const moved = Math.hypot(dx,dy) > TAP_MOVE_THRESHOLD;
+          const sourceTap = captureMode === "mp" ? makeTapLikeEvent(e) : null;
           stageTap.down = false;
 
           if (!moved){
-            handleBlankTap(e, makeTapLikeEvent(e));
+            handleBlankTap(e, sourceTap);
           }
         }
         return;
@@ -6194,7 +6196,29 @@ async function saveSelectedStickerToLibrary(){
       showHint("applied", 700);
     });
 
+    function finishCaptureControls(){
+      pointerDown = false;
+      fieldDrawing = false;
+      stageTap.down = false;
+      clearTimeout(blankTapTimer);
+      blankTapTimer = 0;
+      lastBlankTap = { time:0, x:0, y:0 };
+
+      pendingGridRect = null;
+      roi = null;
+      path = [];
+      startPt = null;
+
+      gridbar.style.display = "none";
+      showRoiGridPreview(false);
+      hideROI();
+      clearPathPreview();
+      closeCaptureTour();
+      setCaptureMode("none");
+    }
+
     function finishEditControls(){
+      finishCaptureControls();
       saveBrushPanelToSettings();
       if (activeBrushTool === "bw" || activeBrushTool === "noise"){
         updateLiveEffectPreview();
@@ -6207,7 +6231,7 @@ async function saveSelectedStickerToLibrary(){
       brushPanel.style.display = "none";
       sidebar.style.display = "none";
       editbar.style.display = "none";
-      showHint("exit Edit", 800);
+      showHint("done", 800);
     }
 
     document.getElementById("btnDone").addEventListener("click", finishEditControls);
@@ -7111,7 +7135,7 @@ window.addEventListener("keydown", (e)=>{
 });
 
     setActionEnabled(false);
-    setCaptureMode("mp");
+    setCaptureMode("none");
     resizeDrawLayer();
     refreshLibraryUI().catch(console.error);
     initModel();
