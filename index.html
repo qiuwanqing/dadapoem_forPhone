@@ -6212,6 +6212,7 @@ function setLibraryDrawerOpen(open){
         libPanelWrap.classList.remove("libDrawerActive", "libDrawerPeeking", "libDrawerDragging");
         libPanelWrap.style.display = "none";
         libPanelWrap.style.transform = "";
+        updateFloatingButtons();
       }
     }, 280);
   }
@@ -7021,7 +7022,7 @@ function updateFloatingButtons() {
     return;
   }
 
-  const isPanelOpen = libPanelWrap.style.display === 'flex';
+  const isPanelOpen = libPanelWrap.classList.contains('libDrawerOpen');
 
   if (isPanelOpen) {
     // Library Panel 打开时，按钮跟随 Panel 右侧边缘
