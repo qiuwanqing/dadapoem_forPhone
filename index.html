@@ -461,11 +461,13 @@
     }
     input[type="range"]{ width:140px; }
     #brushPanel input[type="range"],
-    #sidebar input[type="range"]{
+    #sidebar input[type="range"],
+    #gridbar input[type="range"]{
       display:none;
     }
     #brushPanel .pill,
-    #sidebar .pill{
+    #sidebar .pill,
+    #gridbar .pill{
       padding:0;
       border:0;
       background:transparent;
@@ -474,7 +476,8 @@
       pointer-events:auto;
     }
     #brushPanel .pill > span:first-child,
-    #sidebar .pill > span:first-child{
+    #sidebar .pill > span:first-child,
+    #gridbar .pill > span:first-child{
       display:none;
     }
     .controlDial{
@@ -2302,11 +2305,17 @@ function createCircularControl(inputEl, valueEl, options = {}){
   dial.style.setProperty("--dial-number-size", `${NUMBER_DIAL_NUMBER_SIZE_PX}px`);
   dial.style.setProperty("--dial-round-size", `${NUMBER_DIAL_ROUND_SIZE_PX}px`);
   const ticks = [];
-  for (let n = 0; n <= 120; n += 10){
+  const tickStart = options.tickStart ?? 0;
+  const tickEnd = options.tickEnd ?? 120;
+  const tickStep = options.tickStep ?? 10;
+  const tickAssetValue = options.tickAssetValue || ((n)=>n);
+  const tickAltValue = options.tickAltValue || tickAssetValue;
+  for (let n = tickStart; n <= tickEnd; n += tickStep){
     const tick = document.createElement("img");
     tick.className = "controlDialTick";
-    tick.src = `assets/${n}.png`;
-    tick.alt = String(n);
+    const assetValue = tickAssetValue(n);
+    tick.src = `assets/${assetValue}.png`;
+    tick.alt = String(tickAltValue(n));
     tick.style.width = `${NUMBER_DIAL_NUMBER_SIZE_BY_VALUE[n] || NUMBER_DIAL_NUMBER_SIZE_PX}px`;
     dial.appendChild(tick);
     ticks.push({ n, tick });
@@ -2332,6 +2341,9 @@ function createCircularControl(inputEl, valueEl, options = {}){
     kind: options.kind || "number",
     uiMax: options.uiMax || 120,
     unit: options.unit || "",
+    valueToUi: options.valueToUi || null,
+    uiToValue: options.uiToValue || null,
+    nearestTickValue: options.nearestTickValue || null,
     lastUiValue: null,
     update(){
       const realMin = Number(inputEl.min) || 0;
@@ -2339,7 +2351,7 @@ function createCircularControl(inputEl, valueEl, options = {}){
       const real = Number(inputEl.value) || 0;
       const uiValue = this.kind === "angle"
         ? real
-        : mapRange(real, realMin, realMax, 0, this.uiMax);
+        : (this.valueToUi ? this.valueToUi(real, realMin, realMax) : mapRange(real, realMin, realMax, 0, this.uiMax));
       const deg = this.kind === "angle"
         ? real
         : mapRange(uiValue, 0, this.uiMax, 0, NUMBER_DIAL_ARC_DEG);
@@ -2348,7 +2360,7 @@ function createCircularControl(inputEl, valueEl, options = {}){
         : deg + NUMBER_DIAL_POINTER_OFFSET_DEG;
       center.style.transform = `translate(-50%, -50%) rotate(${visualDeg}deg)`;
       const tickRadius = NUMBER_DIAL_TICK_RADIUS_PX;
-      const activeTickValue = nearestDialAssetValue(uiValue);
+      const activeTickValue = this.nearestTickValue ? this.nearestTickValue(uiValue) : nearestDialAssetValue(uiValue);
       ticks.forEach(({ n, tick })=>{
         const tickAngle = mapRange(n, 0, 120, 0, NUMBER_DIAL_ARC_DEG * Math.PI / 180) - Math.PI / 2;
         const x = Math.cos(tickAngle) * tickRadius;
@@ -2392,7 +2404,7 @@ function createCircularControl(inputEl, valueEl, options = {}){
       const realMax = Number(inputEl.max) || 100;
       const real = this.kind === "angle"
         ? Math.round(frac * 360) % 360
-        : Math.round(mapRange(nextUiValue, 0, this.uiMax, realMin, realMax));
+        : (this.uiToValue ? this.uiToValue(nextUiValue, realMin, realMax) : Math.round(mapRange(nextUiValue, 0, this.uiMax, realMin, realMax)));
       inputEl.value = String(Math.max(realMin, Math.min(realMax, real)));
       inputEl.dispatchEvent(new Event("input", { bubbles: true }));
       this.update();
@@ -5358,6 +5370,8 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
     if (captureMode === "grid"){
       pendingGridRect = { ...roi };
       gridbar.style.display = "flex";
+      syncControlLabelVisibility(gridbar);
+      updateCircularControls();
 
       showRoiGridPreview(true);
       updateRoiGridPreview();
@@ -6807,6 +6821,7 @@ btnLibDelete.addEventListener("click", async (e)=>{
       gridRowsVal.textContent = String(gridRowsEl.value);
       gridColsVal.textContent = String(gridColsEl.value);
       updateRoiGridPreview();
+      updateCircularControls();
     }
     gridRowsEl.addEventListener("input", syncGridVals);
     gridColsEl.addEventListener("input", syncGridVals);
@@ -6875,6 +6890,28 @@ sideAngEl.addEventListener("input", (e)=>{
   updateCircularControls();
 });
 
+createCircularControl(gridRowsEl, gridRowsVal, {
+  uiMax: 120,
+  tickStart: 10,
+  tickEnd: 120,
+  tickStep: 10,
+  tickAssetValue: n => n / 10,
+  tickAltValue: n => n / 10,
+  valueToUi: real => real * 10,
+  uiToValue: (ui, min, max) => Math.max(min, Math.min(max, Math.round(ui / 10))),
+  nearestTickValue: ui => Math.max(10, Math.min(120, Math.round(ui / 10) * 10))
+});
+createCircularControl(gridColsEl, gridColsVal, {
+  uiMax: 120,
+  tickStart: 10,
+  tickEnd: 120,
+  tickStep: 10,
+  tickAssetValue: n => n / 10,
+  tickAltValue: n => n / 10,
+  valueToUi: real => real * 10,
+  uiToValue: (ui, min, max) => Math.max(min, Math.min(max, Math.round(ui / 10))),
+  nearestTickValue: ui => Math.max(10, Math.min(120, Math.round(ui / 10) * 10))
+});
 createCircularControl(radiusEl, radiusValEl, { uiMax: 120 });
 createCircularControl(strengthEl, strengthValEl, { uiMax: 120 });
 createCircularControl(sideLenEl, sideLenVal, { uiMax: 120 });
