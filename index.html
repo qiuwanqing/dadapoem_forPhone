@@ -1656,6 +1656,15 @@
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    if (WebAssembly?.instantiateStreaming) {
+      const ua = navigator.userAgent || "";
+      const isIOSWebKit = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      if (isIOSWebKit) {
+        console.warn("[MP init] disabling instantiateStreaming on iOS Safari");
+        WebAssembly.instantiateStreaming = undefined;
+      }
+    }
       
     // 云端库配置Supabase 初始化
       const SUPABASE_URL = "https://vbhlolqwjgbffomenuec.supabase.co";
