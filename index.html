@@ -1231,6 +1231,10 @@
         left:0;
         right:0;
         z-index:45;
+        --drawer-bg-top: .74;
+        --drawer-bg-mid: .42;
+        --drawer-bg-bottom: .10;
+        --drawer-pull: 0px;
         height: calc(var(--vh, 1vh) * 100);
         box-sizing:border-box;
         padding:0;
@@ -1248,10 +1252,35 @@
         height: calc(var(--vh, 1vh) * 100);
         overflow:hidden;
         overscroll-behavior: contain;
-        background: linear-gradient(to bottom, rgba(0,0,0,.88), rgba(0,0,0,.58) 72%, rgba(0,0,0,.20));
+        background: linear-gradient(
+          to bottom,
+          rgba(0,0,0,var(--drawer-bg-top)),
+          rgba(0,0,0,var(--drawer-bg-mid)) 72%,
+          rgba(0,0,0,var(--drawer-bg-bottom))
+        );
         border-bottom:1px solid rgba(255,255,255,.12);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
+      }
+
+      .topbar.drawerOpening #functionDrawerContent{
+        animation: drawerContentBounce 360ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .topbar.drawerOpening .functionDrawerHandle{
+        animation: drawerHandleBounce 360ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      @keyframes drawerContentBounce{
+        0%   { transform:translateY(-18px); }
+        58%  { transform:translateY(8px); }
+        100% { transform:translateY(0); }
+      }
+
+      @keyframes drawerHandleBounce{
+        0%   { transform:translateY(0); }
+        55%  { transform:translateY(7px); }
+        100% { transform:translateY(0); }
       }
 
       .functionDrawerHandle{
@@ -1757,7 +1786,15 @@
       if (open){
         collapseFunctionGroups();
         functionDrawer.scrollTop = 0;
+        functionDrawer.classList.remove("drawerOpening");
+        void functionDrawer.offsetWidth;
+        functionDrawer.classList.add("drawerOpening");
+        clearTimeout(functionDrawer._drawerOpeningTimer);
+        functionDrawer._drawerOpeningTimer = setTimeout(()=>{
+          functionDrawer.classList.remove("drawerOpening");
+        }, 420);
       } else {
+        functionDrawer.classList.remove("drawerOpening");
         libPanelWrap.style.display = "none";
         updateFloatingButtons();
       }
@@ -3562,35 +3599,96 @@ function assignDocksForField(){
       }
     }
 
+function initErrorText(err){
+  return err?.stack || err?.message || String(err);
+}
+
+async function fetchInitBuffer(url, label){
+  const res = await fetch(url, { cache: "force-cache" });
+  if (!res.ok){
+    throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
+  }
+  return await res.arrayBuffer();
+}
+
 async function initModel(){
   try{
-    loader.innerText = "Preparing to load MediaPipe…";
+    const vendorUrl = new URL("./vendor/", location.href).href;
+    const bundleUrl = new URL("./vendor/vision_bundle.mjs", location.href).href;
+    const modelUrl = new URL("./models/magic_touch.tflite", location.href).href;
 
-    const mod = await import("./vendor/vision_bundle.mjs");
+    loader.innerText = "Preparing to load MediaPipe…";
+    console.log("[MP init] bundle:", bundleUrl);
+    console.log("[MP init] vendor:", vendorUrl);
+    console.log("[MP init] model:", modelUrl);
+
+    const mod = await import(bundleUrl);
     InteractiveSegmenter = mod.InteractiveSegmenter;
     FilesetResolver = mod.FilesetResolver;
 
-    loader.innerText = "Initializing Vision…";
+    loader.innerText = "Initializing Vision WASM…";
+    const vision = await FilesetResolver.forVisionTasks(vendorUrl);
 
-    const vision = await FilesetResolver.forVisionTasks("./vendor/");
+    loader.innerText = "Fetching model…";
+    const modelBuffer = await fetchInitBuffer(modelUrl, "model");
+    console.log("[MP init] model bytes:", modelBuffer.byteLength);
 
     loader.innerText = "Loading model…";
+    const modelBytes = new Uint8Array(modelBuffer);
+    const attempts = [
+      async () => {
+        console.log("[MP init] trying createFromOptions + modelAssetBuffer");
+        return await InteractiveSegmenter.createFromOptions(vision,{
+          baseOptions:{
+            modelAssetBuffer: modelBytes,
+            delegate:"CPU"
+          },
+          outputCategoryMask:true,
+          outputConfidenceMasks:false
+        });
+      },
+      async () => {
+        console.log("[MP init] trying createFromModelBuffer fallback");
+        const seg = await InteractiveSegmenter.createFromModelBuffer(vision, modelBytes);
+        await seg.setOptions({
+          outputCategoryMask:true,
+          outputConfidenceMasks:false
+        });
+        return seg;
+      },
+      async () => {
+        console.log("[MP init] trying createFromOptions + modelAssetPath fallback");
+        return await InteractiveSegmenter.createFromOptions(vision,{
+          baseOptions:{
+            modelAssetPath:modelUrl,
+            delegate:"CPU"
+          },
+          outputCategoryMask:true,
+          outputConfidenceMasks:false
+        });
+      }
+    ];
 
-    interactiveSegmenter =
-      await InteractiveSegmenter.createFromOptions(vision,{
-        baseOptions:{
-          modelAssetPath:"./models/magic_touch.tflite",
-          delegate:"CPU"
-        },
-        outputCategoryMask:true,
-        outputConfidenceMasks:false
-      });
+    const errors = [];
+    for (const attempt of attempts){
+      try{
+        interactiveSegmenter = await attempt();
+        break;
+      }catch(err){
+        errors.push(initErrorText(err));
+        console.warn("[MP init attempt failed]", err);
+      }
+    }
+    if (!interactiveSegmenter){
+      throw new Error(errors.join("\n--- fallback ---\n"));
+    }
 
     loader.innerText = "Model ready (click Start Camera)";
 
   }catch(err){
-    console.error(err);
-    loader.innerText = "Failed to load model";
+    const details = initErrorText(err);
+    console.error("[MP init failed]", err);
+    loader.innerText = `Failed to load model\n${details.slice(0, 180)}`;
   }
 }
 
