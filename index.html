@@ -1224,6 +1224,99 @@
         transform: rotate(0deg);
     }
 
+
+
+    /* ---------------- Capture Tour / Library Side Drawer ---------------- */
+    #captureTourContainer{
+      position:fixed;
+      inset:0;
+      z-index:12000;
+      pointer-events:none;
+    }
+    .captureTourBtn{
+      position:absolute;
+      border:0;
+      background:none;
+      padding:0;
+      pointer-events:auto;
+      touch-action:none;
+      transform:translate(-50%, -50%);
+      cursor:pointer;
+      transition:transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+    }
+    .captureTourBtn:active{
+      transform:translate(-50%, -50%) scale(.96);
+      filter:brightness(1.18);
+    }
+    .captureTourBtn img{
+      display:block;
+      height:auto;
+      max-width:72px;
+      pointer-events:none;
+    }
+    #captureTourCenter{
+      position:absolute;
+      width:74px;
+      height:66px;
+      transform:translate(-50%, -50%);
+      pointer-events:auto;
+      touch-action:none;
+      opacity:.88;
+      filter:drop-shadow(0 8px 22px rgba(0,0,0,.36));
+    }
+    #libEdgeHandle{
+      position:fixed;
+      left:0;
+      top:45%;
+      z-index:85;
+      width:24px;
+      height:76px;
+      border:0;
+      padding:0;
+      border-radius:0 999px 999px 0;
+      background:rgba(92,183,255,.72);
+      box-shadow:0 8px 24px rgba(0,0,0,.24);
+      touch-action:none;
+      pointer-events:auto;
+      cursor:grab;
+    }
+    #libEdgeHandle::after{
+      content:"";
+      position:absolute;
+      left:7px;
+      top:18px;
+      width:4px;
+      height:40px;
+      border-radius:999px;
+      background:rgba(255,255,255,.72);
+    }
+    #libModeTabs{
+      display:flex;
+      gap:4px;
+      margin-bottom:6px;
+    }
+    #libModeTabs button{
+      flex:1;
+      border:0;
+      border-radius:0;
+      padding:7px 4px;
+      background:#808080;
+      color:#fff;
+      font-size:9px;
+      font-weight:700;
+      line-height:1;
+    }
+    #libModeTabs button.active{
+      background:#5cb7ff;
+      color:#606060;
+    }
+
+
+    #btnSave,
+    #btnLibrary{
+      display:none;
+    }
+
     @media (orientation: portrait) {
       .topbar{
         position: fixed;
@@ -1336,6 +1429,44 @@
       #globalActionButtons{
         z-index:90;
       }
+
+
+
+      #captureGroup{
+        display:none;
+      }
+
+      #libPanelWrap{
+        position:fixed;
+        left:0;
+        top:calc(118px + env(safe-area-inset-top));
+        width:252px;
+        height:62vh;
+        max-height:calc((var(--vh, 1vh) * 100) - 160px - env(safe-area-inset-bottom));
+        transform:translateX(calc(-100% - 2px));
+        transition:transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+        z-index:80;
+        pointer-events:none;
+      }
+
+      #libPanelWrap.libDrawerActive{
+        display:flex !important;
+      }
+
+      #libPanelWrap.libDrawerOpen{
+        transform:translateX(0);
+        pointer-events:auto;
+      }
+
+      #libPanelWrap.libDrawerDragging{
+        transition:none;
+      }
+
+      #libPanelWrap.libDrawerPeeking{
+        transform:translateX(calc(-100% + 22px));
+        pointer-events:none;
+      }
+
 
       .funcCircleBtn img{
         max-width:48px;
@@ -1555,8 +1686,13 @@
 </div>
     
 <!-- ==================== Library 面板 ==================== -->
+    <button id="libEdgeHandle" type="button" aria-label="Library drawer"></button>
     <div id="libPanelWrap">
       <div id="libPanel">
+        <div id="libModeTabs">
+          <button id="btnLibModeStickers" type="button" class="active">Sticker</button>
+          <button id="btnLibModeArchive" type="button">Archive</button>
+        </div>
         <div class="row">
           <button id="btnLibSave">Save Sticker</button>
           <button id="btnLibExport" style="display:none;">Export</button>
@@ -1795,7 +1931,6 @@
         }, 420);
       } else {
         functionDrawer.classList.remove("drawerOpening");
-        libPanelWrap.style.display = "none";
         updateFloatingButtons();
       }
     }
@@ -1856,6 +1991,72 @@
     functionDrawerMQ.addEventListener?.("change", (e)=>{
       if (!e.matches) setFunctionDrawerOpen(false);
     });
+
+    function closeCaptureTour(){
+      const existing = document.getElementById("captureTourContainer");
+      existing?._close?.();
+    }
+
+    function showCaptureTour(clientX, clientY, sourceTap = null){
+      closeCaptureTour();
+      const container = document.createElement("div");
+      container.id = "captureTourContainer";
+      document.body.appendChild(container);
+
+      const pad = 96;
+      const cx = clamp(clientX, pad, window.innerWidth - pad);
+      const cy = clamp(clientY, pad, window.innerHeight - pad);
+      const items = [
+        { mode:"mp",   png:"MP.png",   alt:"MP",   w:44, angle:-132, r:86 },
+        { mode:"draw", png:"draw.png", alt:"DRAW", w:72, angle:-172, r:94 },
+        { mode:"rect", png:"rect.png", alt:"RECT", w:46, angle:132,  r:86 },
+        { mode:"grid", png:"grid.png", alt:"GRID", w:48, angle:92,   r:92 }
+      ];
+
+      function close(){
+        document.removeEventListener("pointerdown", onOutside, true);
+        container.remove();
+      }
+      container._close = close;
+
+      const center = document.createElement("img");
+      center.id = "captureTourCenter";
+      center.src = "assets/round.png";
+      center.alt = "";
+      center.style.left = cx + "px";
+      center.style.top = cy + "px";
+      container.appendChild(center);
+
+      items.forEach(item => {
+        const btn = document.createElement("button");
+        btn.className = "captureTourBtn";
+        btn.type = "button";
+        btn.style.left = (cx + Math.cos(item.angle * Math.PI / 180) * item.r) + "px";
+        btn.style.top = (cy + Math.sin(item.angle * Math.PI / 180) * item.r) + "px";
+        const img = document.createElement("img");
+        img.src = "assets/" + item.png;
+        img.alt = item.alt;
+        img.style.width = item.w + "px";
+        btn.appendChild(img);
+        btn.addEventListener("click", async (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+          setCaptureMode(item.mode);
+          if (item.mode === "mp" && sourceTap){
+            await handleMediaPipeTap(sourceTap);
+          }
+        });
+        container.appendChild(btn);
+      });
+
+      function onOutside(e){
+        if (e.target.closest("#captureTourContainer")) return;
+        close();
+      }
+      setTimeout(()=>document.addEventListener("pointerdown", onOutside, true), 0);
+      showHint("Choose capture mode", 650);
+    }
     
 // ===== distort=====
 const btnFxDistort = document.getElementById("btnFxDistort");
@@ -4869,7 +5070,14 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
           stageTap.down = false;
 
           if (!moved){
-            await handleMediaPipeTap(e);
+            const sourceTap = {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              type: e.type,
+              preventDefault(){},
+              stopPropagation(){}
+            };
+            showCaptureTour(e.clientX, e.clientY, sourceTap);
           }
         }
         return;
@@ -5855,12 +6063,42 @@ async function saveSelectedStickerToLibrary(){
       updateCircularControls();
     });
 
+const libEdgeHandle = document.getElementById("libEdgeHandle");
+const btnLibModeStickers = document.getElementById("btnLibModeStickers");
+const btnLibModeArchive = document.getElementById("btnLibModeArchive");
+
+function syncLibraryTabs(){
+  btnLibModeStickers?.classList.toggle("active", libraryMode === "stickers");
+  btnLibModeArchive?.classList.toggle("active", libraryMode === "archive");
+}
+
+function setLibraryDrawerOpen(open){
+  if (!libPanelWrap) return;
+  if (open){
+    libPanelWrap.style.display = "flex";
+    libPanelWrap.classList.add("libDrawerActive");
+    requestAnimationFrame(()=>libPanelWrap.classList.add("libDrawerOpen"));
+  } else {
+    libPanelWrap.classList.remove("libDrawerOpen");
+    updateFloatingButtons();
+    clearTimeout(libPanelWrap._drawerCloseTimer);
+    libPanelWrap._drawerCloseTimer = setTimeout(()=>{
+      if (!libPanelWrap.classList.contains("libDrawerOpen")){
+        libPanelWrap.classList.remove("libDrawerActive", "libDrawerPeeking", "libDrawerDragging");
+        libPanelWrap.style.display = "none";
+        libPanelWrap.style.transform = "";
+      }
+    }, 280);
+  }
+}
+
 async function openLibraryPanel(mode){
   libraryMode = mode;
   if (mode === "stickers") selectedPoemId = "";
+  syncLibraryTabs();
 
   const isOpening = !libPanelWrap.style.display || libPanelWrap.style.display === "none";
-  libPanelWrap.style.display = "flex";
+  setLibraryDrawerOpen(true);
 
   if (isOpening) {
     // 打开时重置为当前视口 CSS 默认宽度
@@ -5871,10 +6109,63 @@ async function openLibraryPanel(mode){
   updateLibraryColumns(defaultWidth);
   updateFloatingButtons(); // 先移动按钮，不等云端内容加载
   await refreshLibraryUI();
+  syncLibraryTabs();
   updateLibraryColumns(defaultWidth);
   updateFloatingButtons(); // 内容加载后再校准一次
   requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));
 }
+
+function setupLibrarySideDrawer(){
+  if (!libEdgeHandle || !libPanelWrap) return;
+  let drag = null;
+
+  function begin(e){
+    drag = {
+      id:e.pointerId,
+      startX:e.clientX,
+      startOpen:libPanelWrap.classList.contains("libDrawerOpen"),
+      width:Math.max(240, libPanelWrap.getBoundingClientRect().width || 252)
+    };
+    libPanelWrap.style.display = "flex";
+    libPanelWrap.classList.add("libDrawerActive", "libDrawerDragging");
+    libEdgeHandle.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }
+
+  function move(e){
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const base = drag.startOpen ? 0 : -drag.width;
+    const x = clamp(base + dx, -drag.width, 0);
+    libPanelWrap.style.transform = `translateX(${x}px)`;
+    e.preventDefault();
+  }
+
+  async function end(e){
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const shouldOpen = drag.startOpen ? dx > -54 : dx > 54;
+    drag = null;
+    libPanelWrap.classList.remove("libDrawerDragging");
+    libPanelWrap.style.transform = "";
+    if (shouldOpen){
+      await openLibraryPanel(libraryMode || "stickers");
+    } else {
+      setLibraryDrawerOpen(false);
+    }
+    e.preventDefault();
+  }
+
+  libEdgeHandle.addEventListener("pointerdown", begin, { passive:false });
+  libEdgeHandle.addEventListener("pointermove", move, { passive:false });
+  libEdgeHandle.addEventListener("pointerup", end, { passive:false });
+  libEdgeHandle.addEventListener("pointercancel", ()=>{ drag = null; libPanelWrap.classList.remove("libDrawerDragging"); }, { passive:true });
+}
+
+setupLibrarySideDrawer();
+
+btnLibModeStickers?.addEventListener("click", async ()=>openLibraryPanel("stickers"));
+btnLibModeArchive?.addEventListener("click", async ()=>openLibraryPanel("archive"));
 
 document.getElementById("btnLibrary").addEventListener("click", async ()=>{
   await openLibraryPanel("stickers");
@@ -5906,8 +6197,7 @@ archiveOverlay?.addEventListener("click", (e)=>{
 });
 
     document.getElementById("btnLibClose").addEventListener("click", ()=>{
-      libPanelWrap.style.display = "none";
-      updateFloatingButtons(); // 更新按钮位置
+      setLibraryDrawerOpen(false);
     });
 
     // 自定义滚动条
