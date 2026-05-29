@@ -3603,12 +3603,21 @@ function initErrorText(err){
   return err?.stack || err?.message || String(err);
 }
 
-async function fetchInitBuffer(url, label){
-  const res = await fetch(url, { cache: "force-cache" });
-  if (!res.ok){
-    throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
+async function fetchInitBuffer(url, label, timeoutMs = 12000){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try{
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: ctrl.signal
+    });
+    if (!res.ok){
+      throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
+    }
+    return await res.arrayBuffer();
+  }finally{
+    clearTimeout(timer);
   }
-  return await res.arrayBuffer();
 }
 
 async function initModel(){
@@ -3629,33 +3638,40 @@ async function initModel(){
     loader.innerText = "Initializing Vision WASM…";
     const vision = await FilesetResolver.forVisionTasks(vendorUrl);
 
-    loader.innerText = "Fetching model…";
-    const modelBuffer = await fetchInitBuffer(modelUrl, "model");
-    console.log("[MP init] model bytes:", modelBuffer.byteLength);
-
     loader.innerText = "Loading model…";
-    const modelBytes = new Uint8Array(modelBuffer);
+    let modelBytes = null;
+    try{
+      loader.innerText = "Fetching model…";
+      const modelBuffer = await fetchInitBuffer(modelUrl, "model");
+      modelBytes = new Uint8Array(modelBuffer);
+      console.log("[MP init] model bytes:", modelBytes.byteLength);
+    }catch(err){
+      console.warn("[MP init] model prefetch failed; falling back to modelAssetPath", err);
+    }
+
     const attempts = [
-      async () => {
-        console.log("[MP init] trying createFromOptions + modelAssetBuffer");
-        return await InteractiveSegmenter.createFromOptions(vision,{
-          baseOptions:{
-            modelAssetBuffer: modelBytes,
-            delegate:"CPU"
-          },
-          outputCategoryMask:true,
-          outputConfidenceMasks:false
-        });
-      },
-      async () => {
-        console.log("[MP init] trying createFromModelBuffer fallback");
-        const seg = await InteractiveSegmenter.createFromModelBuffer(vision, modelBytes);
-        await seg.setOptions({
-          outputCategoryMask:true,
-          outputConfidenceMasks:false
-        });
-        return seg;
-      },
+      ...(modelBytes ? [
+        async () => {
+          console.log("[MP init] trying createFromOptions + modelAssetBuffer");
+          return await InteractiveSegmenter.createFromOptions(vision,{
+            baseOptions:{
+              modelAssetBuffer: modelBytes,
+              delegate:"CPU"
+            },
+            outputCategoryMask:true,
+            outputConfidenceMasks:false
+          });
+        },
+        async () => {
+          console.log("[MP init] trying createFromModelBuffer fallback");
+          const seg = await InteractiveSegmenter.createFromModelBuffer(vision, modelBytes);
+          await seg.setOptions({
+            outputCategoryMask:true,
+            outputConfidenceMasks:false
+          });
+          return seg;
+        }
+      ] : []),
       async () => {
         console.log("[MP init] trying createFromOptions + modelAssetPath fallback");
         return await InteractiveSegmenter.createFromOptions(vision,{
