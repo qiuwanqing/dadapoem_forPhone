@@ -6303,10 +6303,21 @@ function setLibraryDrawerOpen(open){
   }
 }
 
-async function openLibraryPanel(mode){
+function positionLibraryPanelUnderTrigger(triggerEl){
+  if (!libPanelWrap || !triggerEl) return;
+  const target = triggerEl.querySelector?.("img") || triggerEl;
+  const rect = target.getBoundingClientRect();
+  const margin = 6;
+  const top = Math.max(0, Math.min(window.innerHeight - 150, rect.bottom + margin));
+  libPanelWrap.style.top = `${Math.round(top)}px`;
+  libPanelWrap.style.maxHeight = `calc((var(--vh, 1vh) * 100) - ${Math.round(top + 12)}px - env(safe-area-inset-bottom))`;
+}
+
+async function openLibraryPanel(mode, triggerEl = null){
   libraryMode = mode;
   if (mode === "stickers") selectedPoemId = "";
   syncLibraryTabs();
+  positionLibraryPanelUnderTrigger(triggerEl || (mode === "stickers" ? document.getElementById("btnLibrary") : btnSave));
 
   const isOpening = !libPanelWrap.style.display || libPanelWrap.style.display === "none";
   setLibraryDrawerOpen(true);
@@ -6373,79 +6384,119 @@ function completeGuideStep(step){
   }
 }
 
-function setupLeftToolDrawer(){
-  if (!libEdgeHandle) return;
-  let drag = null;
-
-  libEdgeHandle.addEventListener("pointerdown", (e)=>{
-    drag = { id:e.pointerId, startX:e.clientX, open:document.body.classList.contains("leftToolsOpen") };
-    libEdgeHandle.setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-  }, { passive:false });
-
-  libEdgeHandle.addEventListener("pointermove", (e)=>{
-    if (!drag || drag.id !== e.pointerId) return;
-    e.preventDefault();
-  }, { passive:false });
-
-  libEdgeHandle.addEventListener("pointerup", (e)=>{
-    if (!drag || drag.id !== e.pointerId) return;
-    const dx = e.clientX - drag.startX;
-    const shouldOpen = drag.open ? dx > -54 : dx > 54;
-    document.body.classList.toggle("leftToolsOpen", shouldOpen);
-    if (shouldOpen) completeGuideStep("left");
-    if (!shouldOpen) collapseFunctionGroups();
-    drag = null;
-    e.preventDefault();
-  }, { passive:false });
-
-  libEdgeHandle.addEventListener("pointercancel", ()=>{ drag = null; }, { passive:true });
+function setLeftToolsOpen(open){
+  document.body.classList.toggle("leftToolsOpen", !!open);
+  if (open) completeGuideStep("left");
+  if (!open) collapseFunctionGroups();
 }
 
-setupLeftToolDrawer();
-
-function setupRightToolDrawer(){
-  if (!rightEdgeHandle) return;
-  let drag = null;
-
-  rightEdgeHandle.addEventListener("pointerdown", (e)=>{
-    drag = { id:e.pointerId, startX:e.clientX, open:document.body.classList.contains("rightToolsOpen") };
-    rightEdgeHandle.setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-  }, { passive:false });
-
-  rightEdgeHandle.addEventListener("pointermove", (e)=>{
-    if (!drag || drag.id !== e.pointerId) return;
-    e.preventDefault();
-  }, { passive:false });
-
-  rightEdgeHandle.addEventListener("pointerup", (e)=>{
-    if (!drag || drag.id !== e.pointerId) return;
-    const dx = e.clientX - drag.startX;
-    const shouldOpen = drag.open ? !(dx > 54) : dx < -54;
-    document.body.classList.toggle("rightToolsOpen", shouldOpen);
-    if (shouldOpen) completeGuideStep("right");
-    if (!shouldOpen) collapseFunctionGroups();
-    drag = null;
-    e.preventDefault();
-  }, { passive:false });
-
-  rightEdgeHandle.addEventListener("pointercancel", ()=>{ drag = null; }, { passive:true });
+function setRightToolsOpen(open){
+  document.body.classList.toggle("rightToolsOpen", !!open);
+  if (open) completeGuideStep("right");
+  if (!open) collapseFunctionGroups();
 }
 
-setupRightToolDrawer();
+function setupHorizontalToolDrawer({ handle, panel, isOpen, setOpen, openDirection }){
+  if (!handle) return;
+  let drag = null;
+  let suppressClick = false;
+  const threshold = 54;
+  const activeThreshold = 12;
+
+  function begin(e){
+    drag = {
+      id:e.pointerId,
+      startX:e.clientX,
+      startY:e.clientY,
+      active:false,
+      captured:false,
+      open:isOpen()
+    };
+    if (e.currentTarget === handle){
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      drag.captured = true;
+      e.preventDefault();
+    }
+  }
+
+  function move(e){
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (!drag.active && Math.abs(dx) > activeThreshold && Math.abs(dx) > Math.abs(dy) * 1.2){
+      drag.active = true;
+    }
+    if (drag.active){
+      if (!drag.captured){
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        drag.captured = true;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
+  function end(e){
+    if (!drag || drag.id !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const wasActive = drag.active;
+    const opened = drag.open
+      ? !(dx * openDirection < -threshold)
+      : (dx * openDirection > threshold);
+    drag = null;
+    if (wasActive || e.currentTarget === handle){
+      setOpen(opened);
+      suppressClick = wasActive;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
+  function cancel(){
+    drag = null;
+  }
+
+  [handle, panel].filter(Boolean).forEach(el=>{
+    el.addEventListener("pointerdown", begin, { passive:false, capture:true });
+    el.addEventListener("pointermove", move, { passive:false, capture:true });
+    el.addEventListener("pointerup", end, { passive:false, capture:true });
+    el.addEventListener("pointercancel", cancel, { passive:true, capture:true });
+    el.addEventListener("click", (e)=>{
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  });
+}
+
+setupHorizontalToolDrawer({
+  handle: libEdgeHandle,
+  panel: document.getElementById("globalGroup"),
+  isOpen: ()=>document.body.classList.contains("leftToolsOpen"),
+  setOpen: setLeftToolsOpen,
+  openDirection: 1
+});
+
+setupHorizontalToolDrawer({
+  handle: rightEdgeHandle,
+  panel: document.getElementById("rightColumn"),
+  isOpen: ()=>document.body.classList.contains("rightToolsOpen"),
+  setOpen: setRightToolsOpen,
+  openDirection: -1
+});
 
 setTimeout(()=>showGuideStep("left"), 900);
 
 btnLibModeStickers?.addEventListener("click", async ()=>openLibraryPanel("stickers"));
 btnLibModeArchive?.addEventListener("click", async ()=>openLibraryPanel("archive"));
 
-document.getElementById("btnLibrary").addEventListener("click", async ()=>{
-  await openLibraryPanel("stickers");
+document.getElementById("btnLibrary").addEventListener("click", async (e)=>{
+  await openLibraryPanel("stickers", e.currentTarget);
 });
 
-btnSave.addEventListener("click", async ()=>{
-  await openLibraryPanel("archive");
+btnSave.addEventListener("click", async (e)=>{
+  await openLibraryPanel("archive", e.currentTarget);
 });
 
 btnLibSave.addEventListener("click", async ()=>{
