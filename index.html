@@ -1256,8 +1256,8 @@
     }
     #captureTourCenter{
       position:absolute;
-      width:74px;
-      height:66px;
+      width:120px;
+      height:105px;
       transform:translate(-50%, -50%);
       pointer-events:auto;
       touch-action:none;
@@ -1269,13 +1269,11 @@
       left:0;
       top:45%;
       z-index:85;
-      width:24px;
-      height:76px;
+      width:34px;
+      height:86px;
       border:0;
       padding:0;
-      border-radius:0 999px 999px 0;
-      background:rgba(92,183,255,.72);
-      box-shadow:0 8px 24px rgba(0,0,0,.24);
+      background:transparent;
       touch-action:none;
       pointer-events:auto;
       cursor:grab;
@@ -1284,11 +1282,13 @@
       content:"";
       position:absolute;
       left:7px;
-      top:18px;
-      width:4px;
-      height:40px;
+      top:50%;
+      width:5px;
+      height:44px;
+      transform:translateY(-50%);
       border-radius:999px;
-      background:rgba(255,255,255,.72);
+      background:rgba(255,255,255,.46);
+      box-shadow:0 1px 8px rgba(0,0,0,.22);
     }
     #libModeTabs{
       display:flex;
@@ -5046,6 +5046,44 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
     // ✅ tap 判定：避免轻微移动造成混乱
     let stageTap = { down:false, x:0, y:0, id:null };
     const TAP_MOVE_THRESHOLD = 10;
+    const BLANK_DOUBLE_TAP_MS = 320;
+    const BLANK_DOUBLE_TAP_DISTANCE = 28;
+    let lastBlankTap = { time:0, x:0, y:0 };
+    let blankTapTimer = 0;
+
+    function makeTapLikeEvent(e){
+      return {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        type: e.type,
+        preventDefault(){},
+        stopPropagation(){}
+      };
+    }
+
+    function handleBlankTap(e, sourceTap = null){
+      const now = performance.now();
+      const closeInTime = now - lastBlankTap.time <= BLANK_DOUBLE_TAP_MS;
+      const closeInSpace = Math.hypot(e.clientX - lastBlankTap.x, e.clientY - lastBlankTap.y) <= BLANK_DOUBLE_TAP_DISTANCE;
+      const isDoubleTap = closeInTime && closeInSpace;
+
+      if (isDoubleTap){
+        clearTimeout(blankTapTimer);
+        blankTapTimer = 0;
+        lastBlankTap = { time:0, x:0, y:0 };
+        showCaptureTour(e.clientX, e.clientY);
+        return;
+      }
+
+      lastBlankTap = { time:now, x:e.clientX, y:e.clientY };
+      clearTimeout(blankTapTimer);
+      blankTapTimer = setTimeout(async ()=>{
+        blankTapTimer = 0;
+        if (captureMode === "mp" && sourceTap){
+          await handleMediaPipeTap(sourceTap);
+        }
+      }, BLANK_DOUBLE_TAP_MS + 20);
+    }
 
     stage.addEventListener("pointerdown", (e)=>{
     if (e.target.closest("#sidebar")) return; 
@@ -5157,14 +5195,7 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
           stageTap.down = false;
 
           if (!moved){
-            const sourceTap = {
-              clientX: e.clientX,
-              clientY: e.clientY,
-              type: e.type,
-              preventDefault(){},
-              stopPropagation(){}
-            };
-            showCaptureTour(e.clientX, e.clientY, sourceTap);
+            handleBlankTap(e, makeTapLikeEvent(e));
           }
         }
         return;
@@ -5231,7 +5262,7 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
         const dy = e.clientY - stageTap.y;
         if (stageTap.down && e.pointerId === stageTap.id && Math.hypot(dx, dy) <= TAP_MOVE_THRESHOLD){
           stageTap.down = false;
-          showCaptureTour(e.clientX, e.clientY);
+          handleBlankTap(e);
         }
         return;
       }
