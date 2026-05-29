@@ -2074,6 +2074,15 @@
       if (!e.matches) setFunctionDrawerOpen(false);
     });
 
+    let lastHapticAt = 0;
+    function hapticTick(duration = 8){
+      if (!navigator.vibrate) return;
+      const now = performance.now();
+      if (now - lastHapticAt < 45) return;
+      lastHapticAt = now;
+      navigator.vibrate(duration);
+    }
+
     function closeCaptureTour(){
       const existing = document.getElementById("captureTourContainer");
       existing?._close?.();
@@ -2180,6 +2189,7 @@
             btn.style.filter = "none";
           }
         });
+        if (bestIdx >= 0 && bestIdx !== hoveredIdx) hapticTick();
         return bestIdx;
       }
 
@@ -2343,6 +2353,7 @@ function createCircularControl(inputEl, valueEl, options = {}){
     uiToValue: options.uiToValue || null,
     nearestTickValue: options.nearestTickValue || null,
     lastUiValue: null,
+    lastHapticValue: null,
     update(){
       const realMin = Number(inputEl.min) || 0;
       const realMax = Number(inputEl.max) || 100;
@@ -2403,6 +2414,13 @@ function createCircularControl(inputEl, valueEl, options = {}){
       const real = this.kind === "angle"
         ? Math.round(frac * 360) % 360
         : (this.uiToValue ? this.uiToValue(nextUiValue, realMin, realMax) : Math.round(mapRange(nextUiValue, 0, this.uiMax, realMin, realMax)));
+      const hapticValue = this.kind === "angle"
+        ? Math.round(real / 15) * 15
+        : (this.nearestTickValue ? this.nearestTickValue(nextUiValue) : nearestDialAssetValue(nextUiValue));
+      if (hapticValue !== this.lastHapticValue){
+        this.lastHapticValue = hapticValue;
+        hapticTick();
+      }
       inputEl.value = String(Math.max(realMin, Math.min(realMax, real)));
       inputEl.dispatchEvent(new Event("input", { bubbles: true }));
       this.update();
@@ -7762,6 +7780,7 @@ function showFunctionCircle(initCx, initCy) {
                 btn.style.filter = "none";
             }
         });
+        if (bestIdx >= 0 && bestIdx !== hoveredIdx) hapticTick();
         return bestIdx;
     }
 
