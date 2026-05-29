@@ -1972,6 +1972,9 @@
             clearTimeout(btn._foldPulseTimer);
             btn._foldPulseTimer = setTimeout(()=>btn.classList.remove("foldPulse"), 280);
             group.classList.toggle("expanded"); // 切换展开状态
+            if (group.id === "globalGroup" && !group.classList.contains("expanded")){
+              setLibraryDrawerOpen(false);
+            }
         });
     });
 
@@ -1991,8 +1994,8 @@
     const functionDrawerContent = document.getElementById("functionDrawerContent");
     const functionDrawerMQ = window.matchMedia("(orientation: portrait)");
 
-    function collapseFunctionGroups(){
-      document.querySelectorAll(".groupFold.expanded").forEach(group => {
+    function collapseFunctionGroups(root = document){
+      root.querySelectorAll(".groupFold.expanded").forEach(group => {
         group.classList.remove("expanded");
       });
     }
@@ -6496,7 +6499,7 @@ function setLeftToolsOpen(open){
   document.body.classList.toggle("leftToolsOpen", !!open);
   if (open) completeGuideStep("left");
   if (!open){
-    collapseFunctionGroups();
+    collapseFunctionGroups(document.getElementById("globalGroup"));
     setLibraryDrawerOpen(false);
     if (guideLeftOpened && !guideRightOpened && guideStep === "leftClose"){
       setTimeout(()=>showGuideStep("right"), 420);
@@ -6508,7 +6511,7 @@ function setRightToolsOpen(open){
   document.body.classList.toggle("rightToolsOpen", !!open);
   if (open) completeGuideStep("right");
   if (!open){
-    collapseFunctionGroups();
+    collapseFunctionGroups(document.getElementById("rightColumn"));
     if (guideRightOpened && !guideCameraStarted && guideStep === "rightClose"){
       setTimeout(()=>showGuideStep("camera"), 420);
     }
