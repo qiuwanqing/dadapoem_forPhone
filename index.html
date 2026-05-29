@@ -1281,7 +1281,7 @@
     #libEdgeHandle{ left:0; }
     #rightEdgeHandle{ right:0; }
     #libModeTabs{
-      display:flex;
+      display:none;
       gap:4px;
       margin-bottom:6px;
     }
@@ -1464,7 +1464,7 @@
         left:20px;
         top:26px;
         z-index:90;
-        transform:translateX(-150px);
+        transform:translateX(-260px);
         transition:transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
         pointer-events:auto;
       }
@@ -6303,21 +6303,30 @@ function setLibraryDrawerOpen(open){
   }
 }
 
-function positionLibraryPanelUnderTrigger(triggerEl){
-  if (!libPanelWrap || !triggerEl) return;
-  const target = triggerEl.querySelector?.("img") || triggerEl;
-  const rect = target.getBoundingClientRect();
-  const margin = 6;
-  const top = Math.max(0, Math.min(window.innerHeight - 150, rect.bottom + margin));
-  libPanelWrap.style.top = `${Math.round(top)}px`;
-  libPanelWrap.style.maxHeight = `calc((var(--vh, 1vh) * 100) - ${Math.round(top + 12)}px - env(safe-area-inset-bottom))`;
+function positionLibraryPanelUnderTrigger(){
+  if (!libPanelWrap) return;
+  const stickerBtn = document.getElementById("btnLibrary");
+  const target = stickerBtn?.querySelector?.("img") || stickerBtn;
+  const rect = target?.getBoundingClientRect?.();
+  if (!rect) return;
+
+  const top = Math.round(rect.bottom + 6);
+  const redoTarget = document.getElementById("btnRedoGlobal");
+  const redoRect = redoTarget?.getBoundingClientRect?.();
+  const fallbackBottom = window.innerHeight - 18;
+  const bottom = Math.max(top + 220, Math.round((redoRect?.bottom || fallbackBottom)));
+  const height = Math.max(220, bottom - top);
+
+  libPanelWrap.style.top = `${top}px`;
+  libPanelWrap.style.height = `${height}px`;
+  libPanelWrap.style.maxHeight = `${height}px`;
 }
 
 async function openLibraryPanel(mode, triggerEl = null){
   libraryMode = mode;
   if (mode === "stickers") selectedPoemId = "";
   syncLibraryTabs();
-  positionLibraryPanelUnderTrigger(triggerEl || (mode === "stickers" ? document.getElementById("btnLibrary") : btnSave));
+  positionLibraryPanelUnderTrigger();
 
   const isOpening = !libPanelWrap.style.display || libPanelWrap.style.display === "none";
   setLibraryDrawerOpen(true);
@@ -6491,12 +6500,12 @@ setTimeout(()=>showGuideStep("left"), 900);
 btnLibModeStickers?.addEventListener("click", async ()=>openLibraryPanel("stickers"));
 btnLibModeArchive?.addEventListener("click", async ()=>openLibraryPanel("archive"));
 
-document.getElementById("btnLibrary").addEventListener("click", async (e)=>{
-  await openLibraryPanel("stickers", e.currentTarget);
+document.getElementById("btnLibrary").addEventListener("click", async ()=>{
+  await openLibraryPanel("stickers");
 });
 
-btnSave.addEventListener("click", async (e)=>{
-  await openLibraryPanel("archive", e.currentTarget);
+btnSave.addEventListener("click", async ()=>{
+  await openLibraryPanel("archive");
 });
 
 btnLibSave.addEventListener("click", async ()=>{
