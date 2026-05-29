@@ -1461,8 +1461,8 @@
 
       #globalGroup{
         position:fixed;
-        left:18px;
-        top:calc(74px + env(safe-area-inset-top));
+        left:20px;
+        top:26px;
         z-index:90;
         transform:translateX(-150px);
         transition:transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1476,9 +1476,9 @@
       #rightColumn{
         position:fixed;
         right:15px;
-        top:calc(74px + env(safe-area-inset-top));
+        top:26px;
         z-index:90;
-        transform:translateX(170px);
+        transform:translateX(190px);
         transition:transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
         pointer-events:auto;
       }
@@ -1488,7 +1488,7 @@
       }
 
       #captureGroup{
-        display:none;
+        display:flex;
       }
 
       #libPanelWrap{
@@ -1508,8 +1508,7 @@
         display:flex !important;
       }
 
-      #libPanelWrap.libDrawerOpen,
-      body.leftToolsOpen #libPanelWrap{
+      #libPanelWrap.libDrawerOpen{
         transform:translateX(0);
         pointer-events:auto;
       }
@@ -2064,11 +2063,13 @@
       const cx = clamp(clientX, pad, window.innerWidth - pad);
       const cy = clamp(clientY, pad, window.innerHeight - pad);
       const items = [
-        { mode:"mp",   png:"MP.png",   alt:"MP",   w:44, angle:-132, r:86 },
-        { mode:"draw", png:"draw.png", alt:"DRAW", w:72, angle:-172, r:94 },
-        { mode:"rect", png:"rect.png", alt:"RECT", w:46, angle:132,  r:86 },
-        { mode:"grid", png:"grid.png", alt:"GRID", w:48, angle:92,   r:92 }
+        { mode:"mp",   png:"MP.png",   alt:"MP",   w:40, r:100 },
+        { mode:"draw", png:"draw.png", alt:"DRAW", w:35, r:105 },
+        { mode:"rect", png:"rect.png", alt:"RECT", w:40, r:110 },
+        { mode:"grid", png:"grid.png", alt:"GRID", w:45, r:110 }
       ];
+      const tourArcCenter = Math.PI;
+      const tourArcSpread = (95 / 180) * Math.PI;
       let centerRotation = Math.PI;
       let draggingDial = false;
       let hoveredIdx = -1;
@@ -2105,8 +2106,9 @@
         btn.className = "captureTourBtn";
         btn.type = "button";
         btn.dataset.captureIdx = i;
-        btn.style.left = (cx + Math.cos(item.angle * Math.PI / 180) * item.r) + "px";
-        btn.style.top = (cy + Math.sin(item.angle * Math.PI / 180) * item.r) + "px";
+        const angle = itemAngle(i);
+        btn.style.left = (cx + Math.cos(angle) * item.r) + "px";
+        btn.style.top = (cy + Math.sin(angle) * item.r) + "px";
         const img = document.createElement("img");
         img.src = "assets/" + item.png;
         img.alt = item.alt;
@@ -2122,7 +2124,8 @@
       });
 
       function itemAngle(i){
-        return items[i].angle * Math.PI / 180;
+        const t = items.length > 1 ? i / (items.length - 1) : 0.5;
+        return tourArcCenter + tourArcSpread / 2 - t * tourArcSpread;
       }
 
       function updateCenterRotation(){
@@ -6258,13 +6261,10 @@ function syncLibraryTabs(){
 function setLibraryDrawerOpen(open){
   if (!libPanelWrap) return;
   if (open){
-    document.body.classList.add("leftToolsOpen");
-    completeGuideStep("left");
     libPanelWrap.style.display = "flex";
     libPanelWrap.classList.add("libDrawerActive");
     requestAnimationFrame(()=>libPanelWrap.classList.add("libDrawerOpen"));
   } else {
-    document.body.classList.remove("leftToolsOpen");
     libPanelWrap.classList.remove("libDrawerOpen");
     updateFloatingButtons();
     clearTimeout(libPanelWrap._drawerCloseTimer);
@@ -6349,54 +6349,36 @@ function completeGuideStep(step){
   }
 }
 
-function setupLibrarySideDrawer(){
-  if (!libEdgeHandle || !libPanelWrap) return;
+function setupLeftToolDrawer(){
+  if (!libEdgeHandle) return;
   let drag = null;
 
-  function begin(e){
-    drag = {
-      id:e.pointerId,
-      startX:e.clientX,
-      startOpen:libPanelWrap.classList.contains("libDrawerOpen"),
-      width:Math.max(240, libPanelWrap.getBoundingClientRect().width || 252)
-    };
-    libPanelWrap.style.display = "flex";
-    libPanelWrap.classList.add("libDrawerActive", "libDrawerDragging");
+  libEdgeHandle.addEventListener("pointerdown", (e)=>{
+    drag = { id:e.pointerId, startX:e.clientX, open:document.body.classList.contains("leftToolsOpen") };
     libEdgeHandle.setPointerCapture?.(e.pointerId);
     e.preventDefault();
-  }
+  }, { passive:false });
 
-  function move(e){
+  libEdgeHandle.addEventListener("pointermove", (e)=>{
     if (!drag || drag.id !== e.pointerId) return;
-    const dx = e.clientX - drag.startX;
-    const base = drag.startOpen ? 0 : -drag.width;
-    const x = clamp(base + dx, -drag.width, 0);
-    libPanelWrap.style.transform = `translateX(${x}px)`;
     e.preventDefault();
-  }
+  }, { passive:false });
 
-  async function end(e){
+  libEdgeHandle.addEventListener("pointerup", (e)=>{
     if (!drag || drag.id !== e.pointerId) return;
     const dx = e.clientX - drag.startX;
-    const shouldOpen = drag.startOpen ? dx > -54 : dx > 54;
+    const shouldOpen = drag.open ? dx > -54 : dx > 54;
+    document.body.classList.toggle("leftToolsOpen", shouldOpen);
+    if (shouldOpen) completeGuideStep("left");
+    if (!shouldOpen) collapseFunctionGroups();
     drag = null;
-    libPanelWrap.classList.remove("libDrawerDragging");
-    libPanelWrap.style.transform = "";
-    if (shouldOpen){
-      await openLibraryPanel(libraryMode || "stickers");
-    } else {
-      setLibraryDrawerOpen(false);
-    }
     e.preventDefault();
-  }
+  }, { passive:false });
 
-  libEdgeHandle.addEventListener("pointerdown", begin, { passive:false });
-  libEdgeHandle.addEventListener("pointermove", move, { passive:false });
-  libEdgeHandle.addEventListener("pointerup", end, { passive:false });
-  libEdgeHandle.addEventListener("pointercancel", ()=>{ drag = null; libPanelWrap.classList.remove("libDrawerDragging"); }, { passive:true });
+  libEdgeHandle.addEventListener("pointercancel", ()=>{ drag = null; }, { passive:true });
 }
 
-setupLibrarySideDrawer();
+setupLeftToolDrawer();
 
 function setupRightToolDrawer(){
   if (!rightEdgeHandle) return;
@@ -6416,7 +6398,7 @@ function setupRightToolDrawer(){
   rightEdgeHandle.addEventListener("pointerup", (e)=>{
     if (!drag || drag.id !== e.pointerId) return;
     const dx = e.clientX - drag.startX;
-    const shouldOpen = drag.open ? dx < 54 : dx < -54;
+    const shouldOpen = drag.open ? !(dx > 54) : dx < -54;
     document.body.classList.toggle("rightToolsOpen", shouldOpen);
     if (shouldOpen) completeGuideStep("right");
     if (!shouldOpen) collapseFunctionGroups();
