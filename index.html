@@ -3942,6 +3942,7 @@ function assignDocksForField(){
 
         loader.style.display = "none";
         resizeDrawLayer();
+        completeGuideStep("camera");
 
         showHint("MP: tap screen = segmentation; sticker: tap = select, drag = move; two fingers = rotate/scale", 1800);
       } catch(e){
@@ -6289,9 +6290,14 @@ function syncLibraryTabs(){
 function setLibraryDrawerOpen(open){
   if (!libPanelWrap) return;
   if (open){
+    clearTimeout(libPanelWrap._drawerCloseTimer);
     libPanelWrap.style.display = "flex";
     libPanelWrap.classList.add("libDrawerActive");
-    requestAnimationFrame(()=>libPanelWrap.classList.add("libDrawerOpen"));
+    requestAnimationFrame(()=>{
+      libPanelWrap.classList.add("libDrawerOpen");
+      updateFloatingButtons();
+      requestAnimationFrame(updateFloatingButtons);
+    });
   } else {
     libPanelWrap.classList.remove("libDrawerOpen");
     updateFloatingButtons();
@@ -6342,7 +6348,6 @@ async function openLibraryPanel(mode, triggerEl = null){
 
   const defaultWidth = Math.round(libPanelWrap.getBoundingClientRect().width || 240);
   updateLibraryColumns(defaultWidth);
-  updateFloatingButtons(); // 先移动按钮，不等云端内容加载
   await refreshLibraryUI();
   syncLibraryTabs();
   updateLibraryColumns(defaultWidth);
@@ -6352,6 +6357,9 @@ async function openLibraryPanel(mode, triggerEl = null){
 
 let guideStep = "left";
 let guideOverlay = null;
+let guideLeftOpened = false;
+let guideRightOpened = false;
+let guideCameraStarted = false;
 
 function clearGuideOverlay(){
   guideOverlay?.remove();
@@ -6373,7 +6381,12 @@ function showGuideStep(step){
   } else if (step === "right"){
     overlay.innerHTML = `
       <div class="guideArrow right">&#8594;</div>
-      <div class="guideText right">从右边缘向左拖，打开 Video / Physics。</div>
+      <div class="guideText right">从右边缘向左拖，打开 Capture / Video / Physics。</div>
+    `;
+  } else if (step === "camera"){
+    overlay.innerHTML = `
+      <div class="guideArrow left">&#8592;</div>
+      <div class="guideText left">再次从左边缘向右拖，点击 Start Camera。</div>
     `;
   } else if (step === "capture"){
     overlay.innerHTML = `
@@ -6389,9 +6402,14 @@ function completeGuideStep(step){
   if (guideStep !== step) return;
   clearGuideOverlay();
   if (step === "left"){
-    setTimeout(()=>showGuideStep("right"), 420);
+    guideLeftOpened = true;
+    guideStep = "leftClose";
   } else if (step === "right"){
-    setTimeout(()=>showGuideStep("capture"), 420);
+    guideRightOpened = true;
+    guideStep = "rightClose";
+  } else if (step === "camera"){
+    guideCameraStarted = true;
+    setTimeout(()=>showGuideStep("capture"), 520);
   } else if (step === "capture"){
     guideStep = "done";
   }
@@ -6400,13 +6418,24 @@ function completeGuideStep(step){
 function setLeftToolsOpen(open){
   document.body.classList.toggle("leftToolsOpen", !!open);
   if (open) completeGuideStep("left");
-  if (!open) collapseFunctionGroups();
+  if (!open){
+    collapseFunctionGroups();
+    setLibraryDrawerOpen(false);
+    if (guideLeftOpened && !guideRightOpened && guideStep === "leftClose"){
+      setTimeout(()=>showGuideStep("right"), 420);
+    }
+  }
 }
 
 function setRightToolsOpen(open){
   document.body.classList.toggle("rightToolsOpen", !!open);
   if (open) completeGuideStep("right");
-  if (!open) collapseFunctionGroups();
+  if (!open){
+    collapseFunctionGroups();
+    if (guideRightOpened && !guideCameraStarted && guideStep === "rightClose"){
+      setTimeout(()=>showGuideStep("camera"), 420);
+    }
+  }
 }
 
 function setupHorizontalToolDrawer({ handle, panel, isOpen, setOpen, openDirection }){
