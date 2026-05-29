@@ -1732,19 +1732,16 @@
     <div id="gridbar">
   <div class="seg">
     <span class="pill">
-      rows
+      <span>rows</span>
       <input id="gridRows" type="range" min="1" max="12" value="3" />
       <span id="gridRowsVal">3</span>
     </span>
 
     <span class="pill">
-      cols
+      <span>cols</span>
       <input id="gridCols" type="range" min="1" max="12" value="4" />
       <span id="gridColsVal">4</span>
     </span>
-
-    <button id="btnGridCancel">cancel</button>
-    <button id="btnGridDone" class="primary">done</button>
   </div>
 </div>
 
@@ -4068,7 +4065,7 @@ async function initModel(){
       throw new Error(errors.join("\n--- fallback ---\n"));
     }
 
-    loader.innerText = "Model ready (click Start Camera)";
+    loader.style.display = "none";
 
   }catch(err){
     const details = initErrorText(err);
@@ -6257,7 +6254,28 @@ async function saveSelectedStickerToLibrary(){
       setCaptureMode("none");
     }
 
-    function finishEditControls(){
+    async function applyPendingGrid(){
+      if (!pendingGridRect) return false;
+
+      // 在用户点全局 done 的手势里：请求 motion 权限 + 安装 shake 监听
+      const ok = await ensureShakeReady();
+      if (!ok){
+        showHint("Motion permission not enabled: cannot shake to shuffle (can enable in Safari settings)", 1400);
+      }
+
+      const rows = parseInt(gridRowsEl.value, 10) || 1;
+      const cols = parseInt(gridColsEl.value, 10) || 1;
+      await createGridFromROI(pendingGridRect, rows, cols);
+
+      showRoiGridPreview(false);
+      gridbar.style.display = "none";
+      pendingGridRect = null;
+      hideROI();
+      return true;
+    }
+
+    async function finishEditControls(){
+      if (await applyPendingGrid()) return;
       finishCaptureControls();
       saveBrushPanelToSettings();
       if (activeBrushTool === "bw" || activeBrushTool === "noise"){
@@ -6826,36 +6844,6 @@ btnLibDelete.addEventListener("click", async (e)=>{
     gridRowsEl.addEventListener("input", syncGridVals);
     gridColsEl.addEventListener("input", syncGridVals);
     syncGridVals();
-
-document.getElementById("btnGridCancel").addEventListener("click", ()=>{
-  gridbar.style.display = "none";
-  showRoiGridPreview(false); 
-  pendingGridRect = null;
-  hideROI();
-  showHint("cancel", 700);
-});
-
-document.getElementById("btnGridDone").addEventListener("click", async ()=>{
-  if (!pendingGridRect) return;
-
-  // ✅ 在用户点 done 的手势里：请求 motion 权限 + 安装 shake 监听
-  //    这样即使 Shuffle OFF，也能摇一摇触发 “只洗 grid”
-  const ok = await ensureShakeReady();
-  if (!ok){
-    showHint("Motion permission not enabled: cannot shake to shuffle (can enable in Safari settings)", 1400);
-    // 不 return：grid 仍然照常生成，只是不能摇
-  }
-
-  const rows = parseInt(gridRowsEl.value, 10) || 1;
-  const cols = parseInt(gridColsEl.value, 10) || 1;
-  await createGridFromROI(pendingGridRect, rows, cols);
-
-  showRoiGridPreview(false);
-
-  gridbar.style.display = "none";
-  pendingGridRect = null;
-  hideROI();
-});
 
 function syncSideVals(){
   sideLenVal.textContent = String(sideLenEl.value);
