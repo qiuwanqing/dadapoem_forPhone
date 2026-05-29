@@ -1287,7 +1287,7 @@
       pointer-events:auto;
       touch-action:none;
       opacity:1;
-      filter:drop-shadow(0 8px 22px rgba(0,0,0,.36));
+      filter:none;
     }
     #libEdgeHandle,
     #rightEdgeHandle{
@@ -2101,13 +2101,13 @@
       const cx = clamp(clientX, pad, window.innerWidth - pad);
       const cy = clamp(clientY, pad, window.innerHeight - pad);
       const items = [
-        { mode:"mp",   png:"MP.png",   alt:"MP",   w:40, r:100 },
-        { mode:"draw", png:"draw.png", alt:"DRAW", w:52, r:105 },
-        { mode:"rect", png:"rect.png", alt:"RECT", w:40, r:110 },
-        { mode:"grid", png:"grid.png", alt:"GRID", w:45, r:110 }
+        { mode:"mp",   png:"MP.png",   alt:"MP",   w:44, r:100 },
+        { mode:"draw", png:"draw.png", alt:"DRAW", w:58, r:105 },
+        { mode:"rect", png:"rect.png", alt:"RECT", w:44, r:110 },
+        { mode:"grid", png:"grid.png", alt:"GRID", w:50, r:110 }
       ];
       const tourArcCenter = Math.PI;
-      const tourArcSpread = (95 / 180) * Math.PI;
+      const tourArcSpread = (82 / 180) * Math.PI;
       let centerRotation = Math.PI;
       let draggingDial = false;
       let hoveredIdx = -1;
