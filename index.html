@@ -1379,7 +1379,7 @@
       .functionDrawerHandle{
         display:flex;
         flex:0 0 auto;
-        width:100%;
+        width:96px;
         min-height:28px;
         border:0;
         padding:0;
@@ -1390,8 +1390,9 @@
         touch-action:none;
         cursor:pointer;
         position:absolute;
-        left:0;
+        left:50%;
         top:calc(8px + env(safe-area-inset-top));
+        transform:translateX(-50%);
         z-index:2;
         pointer-events:auto;
       }
