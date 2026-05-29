@@ -1231,36 +1231,44 @@
         left:0;
         right:0;
         z-index:45;
-        --drawer-bg-top: .74;
-        --drawer-bg-mid: .42;
-        --drawer-bg-bottom: .10;
-        --drawer-pull: 0px;
+        --drawer-bg-top: .15;
+        --drawer-bg-mid: .15;
+        --drawer-bg-bottom: .015;
+        --drawer-progress: 0;
+        --drawer-content-y: -24px;
+        --drawer-handle-y: 0px;
         height: calc(var(--vh, 1vh) * 100);
         box-sizing:border-box;
         padding:0;
         display:block;
         overflow:hidden;
-        background:transparent;
-        backdrop-filter:none;
-        -webkit-backdrop-filter:none;
+        background: linear-gradient(
+          to bottom,
+          rgba(0,0,0,calc(var(--drawer-bg-top) * var(--drawer-progress))),
+          rgba(0,0,0,calc(var(--drawer-bg-mid) * var(--drawer-progress))) 72%,
+          rgba(0,0,0,calc(var(--drawer-bg-bottom) * var(--drawer-progress)))
+        );
+        backdrop-filter: blur(calc(12px * var(--drawer-progress)));
+        -webkit-backdrop-filter: blur(calc(12px * var(--drawer-progress)));
         pointer-events:none;
         transition:
-          background 180ms ease;
+          background 180ms ease,
+          backdrop-filter 180ms ease,
+          -webkit-backdrop-filter 180ms ease;
       }
 
       .topbar.drawerOpen{
+        --drawer-progress: 1;
+        --drawer-content-y: 0px;
+        --drawer-handle-y: 0px;
         height: calc(var(--vh, 1vh) * 100);
         overflow:hidden;
         overscroll-behavior: contain;
-        background: linear-gradient(
-          to bottom,
-          rgba(0,0,0,var(--drawer-bg-top)),
-          rgba(0,0,0,var(--drawer-bg-mid)) 72%,
-          rgba(0,0,0,var(--drawer-bg-bottom))
-        );
         border-bottom:1px solid rgba(255,255,255,.12);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+      }
+
+      .topbar.drawerDragging{
+        transition:none;
       }
 
       .topbar.drawerOpening #functionDrawerContent{
@@ -1301,6 +1309,8 @@
         top:calc(8px + env(safe-area-inset-top));
         z-index:2;
         pointer-events:auto;
+        transform:translateY(var(--drawer-handle-y));
+        transition:transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       .functionDrawerHandle::before{
@@ -1321,15 +1331,17 @@
         bottom:0;
         overflow:visible;
         padding:0;
-        opacity:1;
-        transform:translateY(0);
+        opacity:var(--drawer-progress);
+        transform:translateY(var(--drawer-content-y));
         transition:opacity 180ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+        pointer-events:none;
+      }
+
+      .topbar.drawerOpen #functionDrawerContent{
         pointer-events:auto;
       }
 
-      .topbar:not(.drawerOpen) #functionDrawerContent{
-        opacity:0;
-        transform:translateY(-10px);
+      .topbar.drawerDragging #functionDrawerContent{
         pointer-events:none;
       }
 
@@ -1644,7 +1656,7 @@
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-      
+
     // 云端库配置Supabase 初始化
       const SUPABASE_URL = "https://vbhlolqwjgbffomenuec.supabase.co";
       const SUPABASE_KEY = "sb_publishable_nVz1LIBAF6qgmYMC97tL3g_mkL-uhur";
@@ -1772,6 +1784,25 @@
     const functionDrawerHandle = document.getElementById("functionDrawerHandle");
     const functionDrawerContent = document.getElementById("functionDrawerContent");
     const functionDrawerMQ = window.matchMedia("(orientation: portrait)");
+    const DRAWER_DRAG_DISTANCE = 180;
+
+    let drawerProgress = 0;
+
+    function clampDrawerProgress(v){
+      return Math.max(0, Math.min(1, v));
+    }
+
+    function applyDrawerProgress(progress, { dragging = false } = {}){
+      if (!functionDrawer) return;
+      drawerProgress = clampDrawerProgress(progress);
+      const contentY = -24 * (1 - drawerProgress);
+      const handleY = dragging
+        ? Math.min(42, Math.max(-18, (drawerProgress - (isFunctionDrawerOpen() ? 1 : 0)) * DRAWER_DRAG_DISTANCE * 0.28))
+        : 0;
+      functionDrawer.style.setProperty("--drawer-progress", drawerProgress.toFixed(3));
+      functionDrawer.style.setProperty("--drawer-content-y", `${contentY.toFixed(1)}px`);
+      functionDrawer.style.setProperty("--drawer-handle-y", `${handleY.toFixed(1)}px`);
+    }
 
     function collapseFunctionGroups(){
       document.querySelectorAll(".groupFold.expanded").forEach(group => {
@@ -1782,7 +1813,9 @@
     function setFunctionDrawerOpen(open){
       if (!functionDrawer) return;
       if (open && !functionDrawerMQ.matches) return;
+      functionDrawer.classList.remove("drawerDragging");
       functionDrawer.classList.toggle("drawerOpen", !!open);
+      applyDrawerProgress(open ? 1 : 0);
       if (open){
         collapseFunctionGroups();
         functionDrawer.scrollTop = 0;
@@ -1815,6 +1848,7 @@
         id: e.pointerId,
         x: e.clientX,
         y: e.clientY,
+        startProgress: isFunctionDrawerOpen() ? 1 : 0,
         active: false
       };
       e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -1825,6 +1859,10 @@
       const dy = e.clientY - drawerGesture.y;
       if (Math.abs(dy) > 10) drawerGesture.active = true;
       if (drawerGesture.active){
+        functionDrawer.classList.remove("drawerOpening");
+        functionDrawer.classList.add("drawerDragging");
+        const nextProgress = drawerGesture.startProgress + dy / DRAWER_DRAG_DISTANCE;
+        applyDrawerProgress(nextProgress, { dragging: true });
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1834,15 +1872,21 @@
       if (!drawerGesture || drawerGesture.id !== e.pointerId) return;
       const dy = e.clientY - drawerGesture.y;
       const wasActive = drawerGesture.active;
+      const startProgress = drawerGesture.startProgress;
       drawerGesture = null;
       if (!wasActive) return;
-      if (dy > 46) setFunctionDrawerOpen(true);
-      if (dy < -46) setFunctionDrawerOpen(false);
+      functionDrawer.classList.remove("drawerDragging");
+      let targetOpen = drawerProgress >= 0.5;
+      if (startProgress === 0 && dy > 46) targetOpen = true;
+      if (startProgress === 1 && dy < -46) targetOpen = false;
+      setFunctionDrawerOpen(targetOpen);
       e.preventDefault();
       e.stopPropagation();
     }
 
     function cancelDrawerGesture(){
+      functionDrawer?.classList.remove("drawerDragging");
+      applyDrawerProgress(isFunctionDrawerOpen() ? 1 : 0);
       drawerGesture = null;
     }
 
@@ -3599,112 +3643,35 @@ function assignDocksForField(){
       }
     }
 
-function initErrorText(err){
-  return err?.stack || err?.message || String(err);
-}
-
-async function fetchInitBuffer(url, label, timeoutMs = 12000){
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try{
-    const res = await fetch(url, {
-      cache: "no-store",
-      signal: ctrl.signal
-    });
-    if (!res.ok){
-      throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
-    }
-    return await res.arrayBuffer();
-  }finally{
-    clearTimeout(timer);
-  }
-}
-
 async function initModel(){
   try{
-    const vendorUrl = new URL("./vendor/", location.href).href;
-    const bundleUrl = new URL("./vendor/vision_bundle.mjs", location.href).href;
-    const modelUrl = new URL("./models/magic_touch.tflite", location.href).href;
-
     loader.innerText = "Preparing to load MediaPipe…";
-    console.log("[MP init] bundle:", bundleUrl);
-    console.log("[MP init] vendor:", vendorUrl);
-    console.log("[MP init] model:", modelUrl);
 
-    const mod = await import(bundleUrl);
+    const mod = await import("./vendor/vision_bundle.mjs");
     InteractiveSegmenter = mod.InteractiveSegmenter;
     FilesetResolver = mod.FilesetResolver;
 
-    loader.innerText = "Initializing Vision WASM…";
-    const vision = await FilesetResolver.forVisionTasks(vendorUrl);
+    loader.innerText = "Initializing Vision…";
+
+    const vision = await FilesetResolver.forVisionTasks("./vendor/");
 
     loader.innerText = "Loading model…";
-    let modelBytes = null;
-    try{
-      loader.innerText = "Fetching model…";
-      const modelBuffer = await fetchInitBuffer(modelUrl, "model");
-      modelBytes = new Uint8Array(modelBuffer);
-      console.log("[MP init] model bytes:", modelBytes.byteLength);
-    }catch(err){
-      console.warn("[MP init] model prefetch failed; falling back to modelAssetPath", err);
-    }
 
-    const attempts = [
-      ...(modelBytes ? [
-        async () => {
-          console.log("[MP init] trying createFromOptions + modelAssetBuffer");
-          return await InteractiveSegmenter.createFromOptions(vision,{
-            baseOptions:{
-              modelAssetBuffer: modelBytes,
-              delegate:"CPU"
-            },
-            outputCategoryMask:true,
-            outputConfidenceMasks:false
-          });
+    interactiveSegmenter =
+      await InteractiveSegmenter.createFromOptions(vision,{
+        baseOptions:{
+          modelAssetPath:"./models/magic_touch.tflite",
+          delegate:"CPU"
         },
-        async () => {
-          console.log("[MP init] trying createFromModelBuffer fallback");
-          const seg = await InteractiveSegmenter.createFromModelBuffer(vision, modelBytes);
-          await seg.setOptions({
-            outputCategoryMask:true,
-            outputConfidenceMasks:false
-          });
-          return seg;
-        }
-      ] : []),
-      async () => {
-        console.log("[MP init] trying createFromOptions + modelAssetPath fallback");
-        return await InteractiveSegmenter.createFromOptions(vision,{
-          baseOptions:{
-            modelAssetPath:modelUrl,
-            delegate:"CPU"
-          },
-          outputCategoryMask:true,
-          outputConfidenceMasks:false
-        });
-      }
-    ];
-
-    const errors = [];
-    for (const attempt of attempts){
-      try{
-        interactiveSegmenter = await attempt();
-        break;
-      }catch(err){
-        errors.push(initErrorText(err));
-        console.warn("[MP init attempt failed]", err);
-      }
-    }
-    if (!interactiveSegmenter){
-      throw new Error(errors.join("\n--- fallback ---\n"));
-    }
+        outputCategoryMask:true,
+        outputConfidenceMasks:false
+      });
 
     loader.innerText = "Model ready (click Start Camera)";
 
   }catch(err){
-    const details = initErrorText(err);
     console.error("[MP init failed]", err);
-    loader.innerText = `Failed to load model\n${details.slice(0, 180)}`;
+    loader.innerText = "Failed to load model";
   }
 }
 
