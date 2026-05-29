@@ -2003,7 +2003,7 @@
       container.id = "captureTourContainer";
       document.body.appendChild(container);
 
-      const pad = 96;
+      const pad = 104;
       const cx = clamp(clientX, pad, window.innerWidth - pad);
       const cy = clamp(clientY, pad, window.innerHeight - pad);
       const items = [
@@ -2012,25 +2012,42 @@
         { mode:"rect", png:"rect.png", alt:"RECT", w:46, angle:132,  r:86 },
         { mode:"grid", png:"grid.png", alt:"GRID", w:48, angle:92,   r:92 }
       ];
+      let centerRotation = Math.PI;
+      let draggingDial = false;
+      let hoveredIdx = -1;
 
       function close(){
         document.removeEventListener("pointerdown", onOutside, true);
+        document.removeEventListener("pointermove", onDocPointerMove);
+        document.removeEventListener("pointerup", onDocPointerUp);
         container.remove();
       }
       container._close = close;
+
+      function pickItem(item){
+        close();
+        setCaptureMode(item.mode);
+        if (item.mode === "mp" && sourceTap){
+          handleMediaPipeTap(sourceTap);
+        }
+      }
 
       const center = document.createElement("img");
       center.id = "captureTourCenter";
       center.src = "assets/round.png";
       center.alt = "";
+      center.draggable = false;
       center.style.left = cx + "px";
       center.style.top = cy + "px";
+      center.style.transformOrigin = "center center";
       container.appendChild(center);
 
-      items.forEach(item => {
+      const btnEls = [];
+      items.forEach((item, i) => {
         const btn = document.createElement("button");
         btn.className = "captureTourBtn";
         btn.type = "button";
+        btn.dataset.captureIdx = i;
         btn.style.left = (cx + Math.cos(item.angle * Math.PI / 180) * item.r) + "px";
         btn.style.top = (cy + Math.sin(item.angle * Math.PI / 180) * item.r) + "px";
         const img = document.createElement("img");
@@ -2038,23 +2055,92 @@
         img.alt = item.alt;
         img.style.width = item.w + "px";
         btn.appendChild(img);
-        btn.addEventListener("click", async (e)=>{
+        btn.addEventListener("click", (e)=>{
           e.preventDefault();
           e.stopPropagation();
-          close();
-          setCaptureMode(item.mode);
-          if (item.mode === "mp" && sourceTap){
-            await handleMediaPipeTap(sourceTap);
-          }
+          pickItem(item);
         });
         container.appendChild(btn);
+        btnEls.push(btn);
       });
+
+      function itemAngle(i){
+        return items[i].angle * Math.PI / 180;
+      }
+
+      function updateCenterRotation(){
+        center.style.transform = `translate(-50%, -50%) rotate(${centerRotation - Math.PI}rad)`;
+      }
+
+      function highlightNearest(pointerAngle){
+        let bestIdx = -1;
+        let bestDist = Infinity;
+        items.forEach((item, i)=>{
+          let diff = pointerAngle - itemAngle(i);
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          const dist = Math.abs(diff);
+          if (dist < bestDist){
+            bestDist = dist;
+            bestIdx = i;
+          }
+        });
+        btnEls.forEach((btn, i)=>{
+          if (i === bestIdx){
+            btn.style.transform = "translate(-50%, -50%) scale(1.32)";
+            btn.style.filter = "brightness(1.36)";
+          } else {
+            btn.style.transform = "translate(-50%, -50%) scale(1)";
+            btn.style.filter = "none";
+          }
+        });
+        return bestIdx;
+      }
+
+      center.addEventListener("pointerdown", (e)=>{
+        draggingDial = true;
+        hoveredIdx = -1;
+        center.setPointerCapture?.(e.pointerId);
+        const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+        centerRotation = angle;
+        updateCenterRotation();
+        hoveredIdx = highlightNearest(angle);
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      function onDocPointerMove(e){
+        if (!draggingDial) return;
+        const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+        centerRotation = angle;
+        updateCenterRotation();
+        hoveredIdx = highlightNearest(angle);
+        e.preventDefault();
+      }
+
+      function onDocPointerUp(e){
+        if (!draggingDial) return;
+        draggingDial = false;
+        if (hoveredIdx >= 0){
+          pickItem(items[hoveredIdx]);
+          return;
+        }
+        btnEls.forEach(btn=>{
+          btn.style.transform = "translate(-50%, -50%) scale(1)";
+          btn.style.filter = "none";
+        });
+        e.preventDefault();
+      }
+
+      document.addEventListener("pointermove", onDocPointerMove);
+      document.addEventListener("pointerup", onDocPointerUp);
 
       function onOutside(e){
         if (e.target.closest("#captureTourContainer")) return;
         close();
       }
       setTimeout(()=>document.addEventListener("pointerdown", onOutside, true), 0);
+      updateCenterRotation();
       showHint("Choose capture mode", 650);
     }
     
@@ -5140,6 +5226,12 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
         hideROI();
         roi = null; path = []; startPt = null;
         clearPathPreview();
+        const dx = e.clientX - stageTap.x;
+        const dy = e.clientY - stageTap.y;
+        if (stageTap.down && e.pointerId === stageTap.id && Math.hypot(dx, dy) <= TAP_MOVE_THRESHOLD){
+          stageTap.down = false;
+          showCaptureTour(e.clientX, e.clientY);
+        }
         return;
       }
 
@@ -5164,6 +5256,7 @@ function applySideExtrude(thickness=18, dx=1, dy=1, darken=0.35, isPreview=false
     }
 
 
+    stageTap.down = false;
     if (captureMode !== "grid"){
       roi = null; path = []; startPt = null;
       clearPathPreview();
