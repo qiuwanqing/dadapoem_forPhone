@@ -1644,17 +1644,6 @@
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-    const APP_BUILD_VERSION = "20260530-mp-standalone-26-1";
-    const isStandaloneLaunch =
-      window.navigator.standalone === true ||
-      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
-
-    function versionedAssetUrl(path){
-      const url = new URL(path, location.href);
-      url.searchParams.set("v", APP_BUILD_VERSION);
-      return url.href;
-    }
       
     // 云端库配置Supabase 初始化
       const SUPABASE_URL = "https://vbhlolqwjgbffomenuec.supabase.co";
@@ -3615,7 +3604,7 @@ function initErrorText(err){
 }
 
 async function fetchInitBuffer(url, label){
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { cache: "force-cache" });
   if (!res.ok){
     throw new Error(`${label} fetch failed: ${res.status} ${res.statusText}`);
   }
@@ -3625,11 +3614,10 @@ async function fetchInitBuffer(url, label){
 async function initModel(){
   try{
     const vendorUrl = new URL("./vendor/", location.href).href;
-    const bundleUrl = versionedAssetUrl("./vendor/vision_bundle.mjs");
-    const modelUrl = versionedAssetUrl("./models/magic_touch.tflite");
+    const bundleUrl = new URL("./vendor/vision_bundle.mjs", location.href).href;
+    const modelUrl = new URL("./models/magic_touch.tflite", location.href).href;
 
-    loader.innerText = `Preparing to load MediaPipe…\n${isStandaloneLaunch ? "Home Screen" : "Safari"} ${APP_BUILD_VERSION}`;
-    console.log("[MP init] build:", APP_BUILD_VERSION, "standalone:", isStandaloneLaunch);
+    loader.innerText = "Preparing to load MediaPipe…";
     console.log("[MP init] bundle:", bundleUrl);
     console.log("[MP init] vendor:", vendorUrl);
     console.log("[MP init] model:", modelUrl);
