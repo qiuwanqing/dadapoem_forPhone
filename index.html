@@ -33,6 +33,23 @@
     }
     button { font: inherit; }
 
+    /* ---------------- vConsole floating switch ---------------- */
+    #__vconsole .vc-switch{
+      height:20px !important;
+      min-width:0 !important;
+      line-height:18px !important;
+      padding:0 8px !important;
+      border:1px solid #000 !important;
+      border-radius:999px !important;
+      background:#fff !important;
+      color:#000 !important;
+      box-shadow:none !important;
+      font-family:Helvetica, Arial, sans-serif !important;
+      font-weight:700 !important;
+      font-size:10px !important;
+      letter-spacing:0 !important;
+    }
+
    /* ---------------- Topbar 顶部按钮栏 ---------------- */
     .topbar{
       position: absolute; top:0; left:0; right:0;
@@ -1261,7 +1278,7 @@
       transform:translate(-50%, -50%);
       pointer-events:auto;
       touch-action:none;
-      opacity:.88;
+      opacity:1;
       filter:drop-shadow(0 8px 22px rgba(0,0,0,.36));
     }
     #libEdgeHandle,
@@ -2068,7 +2085,7 @@
       const cy = clamp(clientY, pad, window.innerHeight - pad);
       const items = [
         { mode:"mp",   png:"MP.png",   alt:"MP",   w:40, r:100 },
-        { mode:"draw", png:"draw.png", alt:"DRAW", w:35, r:105 },
+        { mode:"draw", png:"draw.png", alt:"DRAW", w:52, r:105 },
         { mode:"rect", png:"rect.png", alt:"RECT", w:40, r:110 },
         { mode:"grid", png:"grid.png", alt:"GRID", w:45, r:110 }
       ];
