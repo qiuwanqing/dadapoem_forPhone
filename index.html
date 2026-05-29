@@ -1767,47 +1767,54 @@
       return !!functionDrawer?.classList.contains("drawerOpen");
     }
 
-    functionDrawerHandle?.addEventListener("click", (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      setFunctionDrawerOpen(!isFunctionDrawerOpen());
-    });
-
     let drawerGesture = null;
-    functionDrawer?.addEventListener("pointerdown", (e)=>{
+    function beginDrawerGesture(e){
       if (!functionDrawerMQ.matches) return;
+      if (
+        e.currentTarget !== functionDrawerHandle &&
+        e.target.closest("button, input, #libPanelWrap")
+      ) return;
       drawerGesture = {
         id: e.pointerId,
         x: e.clientX,
-        y: e.clientY
+        y: e.clientY,
+        active: false
       };
-    }, { passive:true });
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
 
-    functionDrawer?.addEventListener("pointerup", (e)=>{
+    function moveDrawerGesture(e){
       if (!drawerGesture || drawerGesture.id !== e.pointerId) return;
       const dy = e.clientY - drawerGesture.y;
-      drawerGesture = null;
-      if (dy > 28) setFunctionDrawerOpen(true);
-      if (dy < -28) setFunctionDrawerOpen(false);
-    }, { passive:true });
-
-    functionDrawer?.addEventListener("pointercancel", ()=>{
-      drawerGesture = null;
-    }, { passive:true });
-
-    functionDrawer?.addEventListener("click", (e)=>{
-      if (!isFunctionDrawerOpen()) return;
-      if (e.target === functionDrawer || e.target === functionDrawerContent){
-        setFunctionDrawerOpen(false);
+      if (Math.abs(dy) > 10) drawerGesture.active = true;
+      if (drawerGesture.active){
+        e.preventDefault();
+        e.stopPropagation();
       }
-    });
+    }
 
-    stage.addEventListener("pointerdown", (e)=>{
-      if (!isFunctionDrawerOpen() || !functionDrawerMQ.matches) return;
-      setFunctionDrawerOpen(false);
+    function endDrawerGesture(e){
+      if (!drawerGesture || drawerGesture.id !== e.pointerId) return;
+      const dy = e.clientY - drawerGesture.y;
+      const wasActive = drawerGesture.active;
+      drawerGesture = null;
+      if (!wasActive) return;
+      if (dy > 46) setFunctionDrawerOpen(true);
+      if (dy < -46) setFunctionDrawerOpen(false);
       e.preventDefault();
-      e.stopImmediatePropagation();
-    }, true);
+      e.stopPropagation();
+    }
+
+    function cancelDrawerGesture(){
+      drawerGesture = null;
+    }
+
+    [functionDrawerHandle, functionDrawerContent].forEach(el => {
+      el?.addEventListener("pointerdown", beginDrawerGesture, { passive:false });
+      el?.addEventListener("pointermove", moveDrawerGesture, { passive:false });
+      el?.addEventListener("pointerup", endDrawerGesture, { passive:false });
+      el?.addEventListener("pointercancel", cancelDrawerGesture, { passive:true });
+    });
 
     functionDrawerMQ.addEventListener?.("change", (e)=>{
       if (!e.matches) setFunctionDrawerOpen(false);
