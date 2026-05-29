@@ -1661,8 +1661,25 @@
       const ua = navigator.userAgent || "";
       const isIOSWebKit = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       if (isIOSWebKit) {
-        console.warn("[MP init] disabling instantiateStreaming on iOS Safari");
-        WebAssembly.instantiateStreaming = undefined;
+        console.warn("[MP init] using instantiateStreaming ArrayBuffer shim on iOS Safari");
+        WebAssembly.instantiateStreaming = async (source, imports) => {
+          const resolved = await source;
+          let buffer;
+          if (resolved instanceof Response) {
+            buffer = await resolved.arrayBuffer();
+          } else if (resolved instanceof ArrayBuffer) {
+            buffer = resolved;
+          } else if (ArrayBuffer.isView(resolved)) {
+            buffer = resolved.buffer;
+          } else if (typeof resolved === "string") {
+            buffer = await (await fetch(resolved, { cache: "no-store" })).arrayBuffer();
+          } else if (resolved?.arrayBuffer) {
+            buffer = await resolved.arrayBuffer();
+          } else {
+            throw new TypeError("Unsupported WASM source for instantiateStreaming shim");
+          }
+          return await WebAssembly.instantiate(buffer, imports);
+        };
       }
     }
       
