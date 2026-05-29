@@ -228,6 +228,7 @@
       text-align:center;
       line-height:1.35;
       pointer-events:none;
+      display:none;
       padding:8px 10px;
       border-radius:12px;
       background: rgba(0,0,0,.35);
@@ -3994,12 +3995,17 @@ async function fetchInitBuffer(url, label){
 }
 
 async function initModel(){
+  const modelHint = (text)=>{
+    loader.style.display = "none";
+    showHint(text, 2200);
+  };
+
   try{
     const vendorUrl = new URL("./vendor/", location.href).href;
     const bundleUrl = new URL("./vendor/vision_bundle.mjs", location.href).href;
     const modelUrl = new URL("./models/magic_touch.tflite", location.href).href;
 
-    loader.innerText = "Preparing to load MediaPipe…";
+    modelHint("Preparing to load MediaPipe...");
     console.log("[MP init] bundle:", bundleUrl);
     console.log("[MP init] vendor:", vendorUrl);
     console.log("[MP init] model:", modelUrl);
@@ -4008,14 +4014,14 @@ async function initModel(){
     InteractiveSegmenter = mod.InteractiveSegmenter;
     FilesetResolver = mod.FilesetResolver;
 
-    loader.innerText = "Initializing Vision WASM…";
+    modelHint("Initializing Vision WASM...");
     const vision = await FilesetResolver.forVisionTasks(vendorUrl);
 
-    loader.innerText = "Fetching model…";
+    modelHint("Fetching model...");
     const modelBuffer = await fetchInitBuffer(modelUrl, "model");
     console.log("[MP init] model bytes:", modelBuffer.byteLength);
 
-    loader.innerText = "Loading model…";
+    modelHint("Loading model...");
     const modelBytes = new Uint8Array(modelBuffer);
     const attempts = [
       async () => {
@@ -6429,22 +6435,22 @@ function showGuideStep(step){
   if (step === "left"){
     overlay.innerHTML = `
       <div class="guideArrow left">&#8592;</div>
-      <div class="guideText left">从左边缘向右拖，打开 Start / Flip / Library。</div>
+      <div class="guideText left">Swipe right from the left edge to open Start / Flip / Library.</div>
     `;
   } else if (step === "right"){
     overlay.innerHTML = `
       <div class="guideArrow right">&#8594;</div>
-      <div class="guideText right">从右边缘向左拖，打开 Capture / Video / Physics。</div>
+      <div class="guideText right">Swipe left from the right edge to open Capture / Video / Physics.</div>
     `;
   } else if (step === "camera"){
     overlay.innerHTML = `
       <div class="guideArrow left">&#8592;</div>
-      <div class="guideText left">再次从左边缘向右拖，点击 Start Camera。</div>
+      <div class="guideText left">Swipe right from the left edge again, then tap Start Camera.</div>
     `;
   } else if (step === "capture"){
     overlay.innerHTML = `
       <div class="guideDot"></div>
-      <div class="guideText capture">双击视频空白区域，会出现 Capture Function，然后旋转选择。</div>
+      <div class="guideText capture">Double-tap a blank area of the video to open Capture Function, then rotate to choose.</div>
     `;
   }
   document.body.appendChild(overlay);
